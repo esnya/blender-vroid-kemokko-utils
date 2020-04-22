@@ -4,12 +4,12 @@ import os
 import importlib
 
 bl_info = {
-  'name': 'VRoid Utils',
+  'name': 'VRoid Kemokko Utils',
   'author': 'esnya',
   'version': (0, 0, 1),
   'blender': (2, 82, 0),
   'location': '',
-  'description': 'Utilities for VRoid',
+  'description': 'Kemokkonize utilities for VRoid',
   'warning': '',
   'support': 'TESTING',
   'wiki_url': '',
@@ -89,7 +89,7 @@ def select_vertices(obj, pred):
   bpy.ops.object.mode_set(mode='EDIT')
 
 class RenameKemoBones(bpy.types.Operator):
-  bl_idname = 'vru.rename_kemo_bones'
+  bl_idname = 'vku.rename_kemo_bones'
   bl_label = 'Rename Kemo Bones'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -113,13 +113,15 @@ class RenameKemoBones(bpy.types.Operator):
       side = 'Left' if ear_bone.head.x > 0 else 'Right'
       rename_hierarcy(ear_bone, f'Ear{side}')
 
+    bpy.ops.object.mode_set(mode='OBJECT')
+
     return {'FINISHED'}
 
   def invoke(self, context, event):
     return self.execute(context)
 
 class BipassUpperChest(bpy.types.Operator):
-  bl_idname = 'vru.bipass_upper_chest'
+  bl_idname = 'vku.bipass_upper_chest'
   bl_label = 'Rename Kemo Bones'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -138,13 +140,15 @@ class BipassUpperChest(bpy.types.Operator):
     next_state = neck_bone.parent == upper_chest_bone if state == None else state
     neck_bone.parent = chest_bone if next_state else upper_chest_bone
 
+    bpy.ops.object.mode_set(mode='OBJECT')
+
     return {'FINISHED'}
 
   def invoke(self, context, state=None):
     return self.execute(state)
 
 class RemoveSuffix(bpy.types.Operator):
-  bl_idname = 'vru.remove_suffix'
+  bl_idname = 'vku.remove_suffix'
   bl_label = 'Remove suffix such as "xxx.001"'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -160,7 +164,7 @@ class RemoveSuffix(bpy.types.Operator):
     return self.execute(context)
 
 class Shiitake(bpy.types.Operator):
-  bl_idname = 'vru.shiitake'
+  bl_idname = 'vku.shiitake'
   bl_label = 'Append shiitake'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -208,16 +212,44 @@ class Shiitake(bpy.types.Operator):
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.transform.translate(value=(0, 0.005, 0))
 
+    bpy.ops.object.mode_set(mode='OBJECT')
+
     return {'FINISHED'}
 
   def invoke(self, context, event):
     return self.execute(context)
 
-class SetupLayers(bpy.types.Operator):
-  bl_idname = 'vru.setup_layers'
-  bl_label = 'Setup atlas layers'
+class Kemokkonize(bpy.types.Operator):
+  bl_idname = 'vku.kemokkonize'
+  bl_label = 'More kemokko'
   bl_options = {'REGISTER', 'UNDO'}
 
+  def execute(self, context):
+    face = bpy.context.scene.objects['F00_000_00_Face_00_SKIN']
+    set_active_object(face)
+    select_vertices(face, lambda v: v.co[1] > 0)
+    bpy.context.scene.tool_settings.transform_pivot_point = 'MEDIAN_POINT'
+    bpy.ops.transform.resize(value=(0, 0, 0))
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    return {'FINISHED'}
+
+class FixTextures(bpy.types.Operator):
+  bl_idname = 'vku.fix_textures'
+  bl_label = 'Fix textures'
+  bl_options = {'REGISTER', 'UNDO'}
+
+  def execute(self, context):
+    bpy.data.images['F00_000_HairBack_00.png'].filepath_raw = '//F00_000_HairBack_00.png'
+
+    return {'FINISHED'}
+
+
+class SetupLayers(bpy.types.Operator):
+  bl_idname = 'vku.setup_layers'
+  bl_label = 'Setup atlas layers'
+  bl_options = {'REGISTER', 'UNDO'}
 
   def execute(self, context):
     bpy.ops.smc.refresh_ob_data()
@@ -235,7 +267,7 @@ class SetupLayers(bpy.types.Operator):
     return self.execute(context)
 
 class RenameAtlas(bpy.types.Operator):
-  bl_idname = 'vru.rename_atlas'
+  bl_idname = 'vku.rename_atlas'
   bl_label = 'Rename atlas materials'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -248,6 +280,7 @@ class RenameAtlas(bpy.types.Operator):
     for img in bpy.data.images:
       if re.match(r'^Atlas(_[0-9]+)?\.png$', img.name):
         img.name = 'Atlas.png'
+
     atlas = bpy.data.images['Atlas.png']
     atlas.pack()
     atlas.unpack(method='WRITE_LOCAL')
@@ -265,7 +298,7 @@ class RenameAtlas(bpy.types.Operator):
     return self.execute(context)
 
 class DoEverything(bpy.types.Operator):
-  bl_idname = 'vru.do_everything'
+  bl_idname = 'vku.do_everything'
   bl_label = 'Do everything'
   bl_options = {'REGISTER', 'UNDO'}
 
@@ -290,73 +323,65 @@ class DoEverything(bpy.types.Operator):
       except:
         print('Error')
 
-
-    bpy.ops.vru.bipass_upper_chest()
+    bpy.ops.vku.bipass_upper_chest()
     bpy.ops.cats_eyes.create_eye_tracking()
     bpy.ops.cats_viseme.create()
-    bpy.ops.vru.bipass_upper_chest()
-    bpy.ops.vru.rename_kemo_bones()
+    bpy.ops.vku.bipass_upper_chest()
+    bpy.ops.vku.rename_kemo_bones()
     bpy.ops.cats_manual.separate_by_materials()
-    bpy.ops.vru.remove_suffix()
-    bpy.ops.vru.shiitake()
+    bpy.ops.vku.remove_suffix()
+    bpy.ops.vku.shiitake()
+    bpy.ops.vku.kemokkonize()
+    bpy.ops.vku.fix_textures()
     bpy.ops.cats_manual.join_meshes()
-    bpy.ops.vru.setup_layers()
+    bpy.ops.vku.setup_layers()
     combine_materials()
-    bpy.ops.vru.rename_atlas()
+    bpy.ops.vku.rename_atlas()
 
     return {'FINISHED'}
 
   def invoke(self, context, event):
     return self.execute(context)
 
-class VRUPanel(bpy.types.Panel):
-  bl_label = 'VRoid Utils'
-  bl_idname = 'VRUPanel'
+class MainPanel(bpy.types.Panel):
+  bl_label = 'VKU'
+  bl_idname = 'main_panel'
   bl_space_type = 'VIEW_3D'
   bl_region_type = 'UI' if version else 'TOOLS'
-  bl_category = 'VRoid Utils'
+  bl_category = 'VKU'
 
   def draw(self, context):
     layout = self.layout
-    col = layout.column(align=True)
-    col.operator('vru.rename_kemo_bones', text='Rename kemo bones')
-    col = layout.column(align=True)
-    col.operator('vru.bipass_upper_chest', text='Bipass Upper Chest')
-    col = layout.column(align=True)
-    col.operator('vru.remove_suffix', text='Remove suffix (i.e. "XXX.001")')
-    col = layout.column(align=True)
-    col.operator('vru.shiitake', text='Shiitake')
-    col = layout.column(align=True)
-    col.operator('vru.setup_layers', text='Setup layers')
-    col = layout.column(align=True)
-    col.operator('vru.rename_atlas', text='Rename atlas materials')
-    col.separator()
-    col = layout.column(align=True)
-    col.operator('cats_armature.fix', text='[CATS] Fix')
-    col = layout.column(align=True)
-    col.operator('cats_eyes.create_eye_tracking', text='[CATS] Create eye tracking')
-    col = layout.column(align=True)
-    col.operator('cats_viseme.create', text='[CATS] Create viseme')
-    col = layout.column(align=True)
-    col.operator('cats_manual.separate_by_materials', text='[CATS] Separate by materials')
-    col = layout.column(align=True)
-    col.operator('cats_manual.join_meshes', text='[CATS] Join all')
-    col = layout.column(align=True)
-    col.operator('smc.combiner', text='[CATS] Generate atlas').cats = True
-    col = layout.column(align=True)
-    col.separator()
-    col = layout.column(align=True)
-    col.operator('vru.do_everything', text='Do evernything')
+
+    layout.column(align=True).operator('cats_armature.fix', text='(1) Fix [CATS]')
+    layout.column(align=True).operator('vku.bipass_upper_chest', text='(2) Bipass Upper Chest')
+    layout.column(align=True).operator('cats_eyes.create_eye_tracking', text='(3) Create eye tracking [CATS]')
+    layout.column(align=True).operator('cats_viseme.create', text='(4) Create viseme [CATS]')
+    layout.column(align=True).operator('vku.bipass_upper_chest', text='(5) Bipass Upper Chest')
+    layout.column(align=True).operator('vku.rename_kemo_bones', text='(6) Rename kemo bones')
+    layout.column(align=True).operator('cats_manual.separate_by_materials', text='(7) Separate by materials [CATS]')
+    layout.column(align=True).operator('vku.remove_suffix', text='(8) Remove suffix')
+    layout.column(align=True).operator('vku.shiitake', text='(9) Shiitake')
+    layout.column(align=True).operator('vku.kemokkonize', text='(10) Kemokkonize')
+    layout.column(align=True).operator('cats_manual.join_meshes', text='(11) Join all [CATS]')
+    layout.column(align=True).operator('vku.fix_textures', text='(12) Fix textures')
+    layout.column(align=True).operator('vku.setup_layers', text='(13) Setup layers')
+    layout.column(align=True).operator('smc.combiner', text='(14) Generate atlas [CATS]').cats = True
+    layout.column(align=True).operator('vku.rename_atlas', text='(15) Rename atlas materials')
+    layout.column(align=True).separator()
+    layout.column(align=True).operator('vku.do_everything', text='Do evernything')
 
 classes = [
   RenameKemoBones,
   BipassUpperChest,
   RemoveSuffix,
   Shiitake,
+  FixTextures,
   SetupLayers,
   RenameAtlas,
+  Kemokkonize,
   DoEverything,
-  VRUPanel,
+  MainPanel,
 ]
 
 def register():
