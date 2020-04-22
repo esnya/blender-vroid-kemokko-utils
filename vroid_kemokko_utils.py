@@ -235,16 +235,24 @@ class Kemokkonize(bpy.types.Operator):
 
     return {'FINISHED'}
 
-class FixTextures(bpy.types.Operator):
-  bl_idname = 'vku.fix_textures'
-  bl_label = 'Fix textures'
+class FixMisc(bpy.types.Operator):
+  bl_idname = 'vku.fix_misc'
+  bl_label = 'Fix textures, meshes, ...'
   bl_options = {'REGISTER', 'UNDO'}
 
   def execute(self, context):
     bpy.data.images['F00_000_HairBack_00.png'].filepath_raw = '//F00_000_HairBack_00.png'
 
-    return {'FINISHED'}
+    eye_extra = bpy.context.scene.objects['F00_000_00_EyeExtra_01_EYE']
+    eye_extra.active_shape_key_index = 0
+    set_active_object(eye_extra)
+    select_vertices(eye_extra, lambda v: v.co[0] > 0)
+    bpy.ops.transform.translate(value=(0.002, 0, 0))
+    select_vertices(eye_extra, lambda v: v.co[0] < 0)
+    bpy.ops.transform.translate(value=(-0.002, 0, 0))
 
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return {'FINISHED'}
 
 class SetupLayers(bpy.types.Operator):
   bl_idname = 'vku.setup_layers'
@@ -332,7 +340,7 @@ class DoEverything(bpy.types.Operator):
     bpy.ops.vku.remove_suffix()
     bpy.ops.vku.shiitake()
     bpy.ops.vku.kemokkonize()
-    bpy.ops.vku.fix_textures()
+    bpy.ops.vku.fix_misc()
     bpy.ops.cats_manual.join_meshes()
     bpy.ops.vku.setup_layers()
     combine_materials()
@@ -363,8 +371,8 @@ class MainPanel(bpy.types.Panel):
     layout.column(align=True).operator('vku.remove_suffix', text='(8) Remove suffix')
     layout.column(align=True).operator('vku.shiitake', text='(9) Shiitake')
     layout.column(align=True).operator('vku.kemokkonize', text='(10) Kemokkonize')
-    layout.column(align=True).operator('cats_manual.join_meshes', text='(11) Join all [CATS]')
-    layout.column(align=True).operator('vku.fix_textures', text='(12) Fix textures')
+    layout.column(align=True).operator('vku.fix_misc', text='(11) Fix misc')
+    layout.column(align=True).operator('cats_manual.join_meshes', text='(12) Join all [CATS]')
     layout.column(align=True).operator('vku.setup_layers', text='(13) Setup layers')
     layout.column(align=True).operator('smc.combiner', text='(14) Generate atlas [CATS]').cats = True
     layout.column(align=True).operator('vku.rename_atlas', text='(15) Rename atlas materials')
@@ -376,7 +384,7 @@ classes = [
   BipassUpperChest,
   RemoveSuffix,
   Shiitake,
-  FixTextures,
+  FixMisc,
   SetupLayers,
   RenameAtlas,
   Kemokkonize,
