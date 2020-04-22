@@ -1,5 +1,3 @@
-from vroid_kemokko_utils import *
-
 bl_info = {
   'name': 'VRoid Kemokko Utils',
   'author': 'esnya',
@@ -14,10 +12,21 @@ bl_info = {
   'category': 'Object'
 }
 
-from . import vroid_kemokko_uitils
 
-register = vroid_kemokko_uitils.register
-unregister = vroid_kemokko_uitils.unregister
+# Append files to sys path
+import sys
+import bpy
+from . import vroid_kemokko_utils
+
+def register():
+  print('Regitering VKU')
+  vroid_kemokko_utils.register()
+  for c in vroid_kemokko_utils.classes:
+    bpy.utils.register_class(c)
+
+def unregister():
+  print('Unregitering VKU')
+  vroid_kemokko_utils.unregister()
 
 if __name__ == '__main__':
-  vroid_kemokko_uitils.register()
+  register()
