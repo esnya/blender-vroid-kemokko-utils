@@ -14,5 +14,10 @@ bl_info = {
   'category': 'Object'
 }
 
+from . import vroid_kemokko_uitils
+
+register = vroid_kemokko_uitils.register
+unregister = vroid_kemokko_uitils.unregister
+
 if __name__ == '__main__':
-  register()
+  vroid_kemokko_uitils.register()
