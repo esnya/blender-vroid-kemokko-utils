@@ -2,17 +2,41 @@ import bpy
 import re
 import os
 import importlib
+from itertools import chain
 
 version = 0 if bpy.app.version < (2, 80, 0) else 2 if bpy.app.version > (2, 80, 99) else 1
 
-mat_table = {
-  'Face_Transparent_Noline_Front': re.compile(r'_EyeExtra'),
-  'Face_Cutout_Noline_Front': re.compile(r'Eye(Highlight|Iris|White)|Face(Brow|Eyelash|Eyeline|Mouth)'),
-  'Face_Cutout_Outline_Front': re.compile(r'_Face_|Shiitake'),
-  'Body_Cutout_Outline_Front': re.compile(r'HairBack|HAIR_0[12]|Body|Ribbon'),
-  'Body_Cutout_Outline_Both': re.compile(r'HAIR_0[34]|CLOTH'),
-}
-mat_layers = sorted(mat_table.keys())
+def get_default_prefix():
+  return re.sub(r'\.blend$', '', bpy.path.basename(bpy.data.filepath))
+
+# (Pattern, Prefix, Fade, Outline, DoubleSided, Fade)
+def gen_mat_pattern(pattern, fade=False, outline=False, doubleSided=False, prefix=None):
+  return (re.compile(pattern), prefix, fade, outline, doubleSided)
+
+def get_mat_name(pattern):
+  _, prefix, fade, outline, doubleSided = pattern
+  return '_'.join((
+    prefix if prefix else get_default_prefix(),
+    'Fade' if fade else 'Cutout',
+    'Outline' if outline else 'NoOutline',
+    'DoubleSided' if doubleSided else 'SingleSided',
+  ))
+
+mat_patterns = [
+  gen_mat_pattern(r'_EyeExtra_', fade=True, prefix='Face'),
+  gen_mat_pattern(r'_FACE$|_EYE$', prefix='Face'),
+  gen_mat_pattern(r'_SKIN$', outline=True, prefix='Skin'),
+  gen_mat_pattern(r'_HAIR_0[34]$', outline=True, doubleSided=True),
+  gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True),
+  gen_mat_pattern(r'_CLOTH$', outline=True, doubleSided=True),
+]
+
+def get_mesh_objects(context = bpy.context):
+  return [o for o in context.scene.objects if o.type == 'MESH']
+
+def get_materials(context = bpy.context):
+  material_slots = list(chain.from_iterable([o.material_slots for o in get_mesh_objects(context)]))
+  return [slot.material for slot in material_slots]
 
 def combine_materials():
   smc = importlib.import_module('material-combiner-addon-master')
@@ -106,14 +130,14 @@ class RenameKemoBones(bpy.types.Operator):
   def invoke(self, context, event):
     return self.execute(context)
 
-class BipassUpperChest(bpy.types.Operator):
-  bl_idname = 'vku.bipass_upper_chest'
+class ToggleUpperChest(bpy.types.Operator):
+  bl_idname = 'vku.toggle_upper_chest'
   bl_label = 'Rename Kemo Bones'
   bl_options = {'REGISTER', 'UNDO'}
 
-  def execute(self, context):
-    state = None
+  state = bpy.props.BoolProperty(default=None)
 
+  def execute(self, context):
     armature = bpy.context.scene.objects['Armature']
     set_active_object(armature)
     bpy.ops.object.mode_set(mode='EDIT')
@@ -123,7 +147,7 @@ class BipassUpperChest(bpy.types.Operator):
     chest_bone = edit_bones['Chest']
     upper_chest_bone = edit_bones['Upper Chest']
 
-    next_state = neck_bone.parent == upper_chest_bone if state == None else state
+    next_state = neck_bone.parent == upper_chest_bone if self.state == None else self.state
     neck_bone.parent = chest_bone if next_state else upper_chest_bone
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -162,7 +186,7 @@ class Shiitake(bpy.types.Operator):
 
     # Rename
     eye_shiitake = bpy.context.scene.objects[next(reversed(sorted([o.name for o in bpy.context.scene.objects if o.name.startswith(eye_extra.name)])))]
-    eye_shiitake.name = 'EyeShiitake'
+    eye_shiitake.name = 'EyeShiitake_FACE'
 
     # Add shape key
     eye_shiitake.active_shape_key_index = eye_shiitake.to_mesh().shape_keys.key_blocks.find('EyeExtra 01.M F00 000 00 EyeExtra On')
@@ -185,7 +209,7 @@ class Shiitake(bpy.types.Operator):
     bpy.ops.object.mode_set(mode='OBJECT')
     eye_shiitake_mat = bpy.context.active_object.material_slots[0].material.copy()
     bpy.context.active_object.material_slots[0].material = eye_shiitake_mat
-    eye_shiitake_mat.name = 'EyeShiitake'
+    eye_shiitake_mat.name = 'EyeShiitake_FACE'
     bpy.ops.image.open(filepath='//EyeShiitake.png', files=[{ 'name': 'EyeShiitake.png' }], relative_path=True, show_multiview=False)
     eye_shiitake_mat.node_tree.nodes['Image Texture'].image = bpy.data.images['EyeShiitake.png']
 
@@ -237,6 +261,46 @@ class FixMisc(bpy.types.Operator):
     select_vertices(eye_extra, lambda v: v.co[0] < 0)
     bpy.ops.transform.translate(value=(-0.002, 0, 0))
 
+    for o in [o for o in get_mesh_objects(context) if re.search(r'_SKIN|_CLOTH$' , o.name)]:
+      bpy.ops.object.mode_set(mode='OBJECT')
+      set_active_object(o)
+      bpy.ops.object.mode_set(mode='EDIT')
+      bpy.ops.mesh.select_all(action='SELECT')
+      bpy.ops.mesh.remove_doubles()
+      bpy.ops.mesh.normals_make_consistent()
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return {'FINISHED'}
+
+face_pattern = re.compile(r'_FACE$|_EYE$|_Face_[0-9]+_SKIN$|^Face$')
+class Merge(bpy.types.Operator):
+  bl_idname = 'vku.merge'
+  bl_label = 'Merge objects'
+
+  bl_options = {'REGISTER', 'UNDO'}
+
+  def execute(self, context):
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    targets = [o for o in get_mesh_objects(context) if face_pattern.search(o.name)]
+    if len(targets) > 0:
+      bpy.ops.object.select_all(action='DESELECT')
+      set_active_object(targets[0])
+      for o in targets:
+        o.select_set(True)
+      bpy.ops.cats_manual.join_meshes_selected()
+      context.active_object.name = 'Face'
+
+    bpy.ops.object.select_all(action='DESELECT')
+    targets = [o for o in get_mesh_objects(context) if not face_pattern.search(o.name)]
+    if len(targets) > 0:
+      bpy.ops.object.select_all(action='DESELECT')
+      set_active_object(targets[0])
+      for o in targets:
+        o.select_set(True)
+      bpy.ops.cats_manual.join_meshes_selected()
+      context.active_object.name = get_default_prefix()
+
     bpy.ops.object.mode_set(mode='OBJECT')
     return {'FINISHED'}
 
@@ -250,11 +314,13 @@ class SetupLayers(bpy.types.Operator):
     mat_list = [mat for mat in bpy.context.scene.smc_ob_data if mat.mat and mat.type != 0]
 
     for mat in mat_list:
-      for layer_name, mat_pattern in mat_table.items():
-        if mat_pattern.search(mat.mat.name):
-          mat.layer = mat_layers.index(layer_name) + 2
-          mat.used = True
-          break
+      matched_index = next(map(lambda a: a[0], filter(lambda a: a[1][0].search(mat.mat.name), enumerate(mat_patterns))), None)
+      if matched_index == None:
+        mat.used = False
+      else:
+        mat.layer = matched_index + 1
+        mat.used = True
+
     return {'FINISHED'}
 
   def invoke(self, context, event):
@@ -266,30 +332,38 @@ class RenameAtlas(bpy.types.Operator):
   bl_options = {'REGISTER', 'UNDO'}
 
   def execute(self, context):
-    for i, layer_name in enumerate(mat_layers):
-      for mat in bpy.data.materials:
-        if re.match(f'^material_atlas_[0-9]+_{i + 2}$', mat.name):
-          mat.name = layer_name
+    name = get_default_prefix()
+    img_name = f'{name}.png'
+    img_path = f'//textures/{img_name}'
 
-    for img in bpy.data.images:
-      if re.match(r'^Atlas(_[0-9]+)?\.png$', img.name):
-        img.name = 'Atlas.png'
+    materials = get_materials(context)
+    for material in materials:
+      m = re.match(r'^material_atlas_[0-9]+_([0-9]+)$', material.name)
+      if m:
+        mat_index = int(m[1]) - 1
+        material.name = get_mat_name(mat_patterns[mat_index])
 
-    atlas = bpy.data.images['Atlas.png']
-    atlas.pack()
-    atlas.unpack(method='WRITE_LOCAL')
-    atlas.pack()
-    atlas.filepath_raw = '//textures/Atlas.png'
-    atlas.save()
-    atlas.unpack(method='WRITE_LOCAL')
+    nodes = list(chain.from_iterable([material.node_tree.nodes for material in materials]))
+    image_names = set([node.image.name for node in nodes if node.type == 'TEX_IMAGE'])
+    atlas_images = [bpy.data.images[name] for name in image_names if re.match(r'^Atlas(_[0-9]+)?\.png$', name)]
 
-    if bpy.data.materials.find('Body_Cutout_Outline_Both') >= 0:
-      bpy.data.materials['Body_Cutout_Outline_Both'].use_backface_culling = False
+    for image in atlas_images:
+      image.name = img_name
+
+    atlas_image = bpy.data.images[img_name]
+    atlas_image.pack()
+    atlas_image.unpack(method='WRITE_LOCAL')
+    atlas_image.pack()
+    atlas_image.filepath = img_path
+    atlas_image.save()
+    atlas_image.unpack(method='WRITE_LOCAL')
+    atlas_image.filepath = img_path
+
+    for mat in bpy.data.materials:
+      if re.search(r'DoubleSided', mat.name):
+        mat.use_backface_culling = False
 
     return {'FINISHED'}
-
-  def invoke(self, context, event):
-    return self.execute(context)
 
 class DoEverything(bpy.types.Operator):
   bl_idname = 'vku.do_everything'
@@ -308,29 +382,22 @@ class DoEverything(bpy.types.Operator):
     scene.combine_mats = True
     scene.remove_zero_weight = True
 
-    for n in range(1, 5):
-      try:
-        bpy.ops.cats_armature.fix()
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.object.mode_set(mode='OBJECT')
-        break
-      except:
-        print('Error')
-
-    bpy.ops.vku.bipass_upper_chest()
+    bpy.ops.cats_armature.fix()
+    bpy.ops.vku.toggle_upper_chest()
     bpy.ops.cats_eyes.create_eye_tracking()
     bpy.ops.cats_viseme.create()
-    bpy.ops.vku.bipass_upper_chest()
+    bpy.ops.vku.toggle_upper_chest()
     bpy.ops.vku.rename_kemo_bones()
     bpy.ops.cats_manual.separate_by_materials()
     bpy.ops.vku.remove_suffix()
     bpy.ops.vku.shiitake()
     bpy.ops.vku.kemokkonize()
     bpy.ops.vku.fix_misc()
-    bpy.ops.cats_manual.join_meshes()
+    bpy.ops.vku.merge()
     bpy.ops.vku.setup_layers()
     combine_materials()
     bpy.ops.vku.rename_atlas()
+    bpy.ops.file.pack_all()
 
     return {'FINISHED'}
 
@@ -348,29 +415,31 @@ class MainPanel(bpy.types.Panel):
     layout = self.layout
 
     layout.column(align=True).operator('cats_armature.fix', text='(1) Fix [CATS]')
-    layout.column(align=True).operator('vku.bipass_upper_chest', text='(2) Bipass Upper Chest')
+    layout.column(align=True).operator('vku.toggle_upper_chest', text='(2) Disable Upper Chest')
     layout.column(align=True).operator('cats_eyes.create_eye_tracking', text='(3) Create eye tracking [CATS]')
     layout.column(align=True).operator('cats_viseme.create', text='(4) Create viseme [CATS]')
-    layout.column(align=True).operator('vku.bipass_upper_chest', text='(5) Bipass Upper Chest')
+    layout.column(align=True).operator('vku.toggle_upper_chest', text='(5) Enable Upper Chest')
     layout.column(align=True).operator('vku.rename_kemo_bones', text='(6) Rename kemo bones')
     layout.column(align=True).operator('cats_manual.separate_by_materials', text='(7) Separate by materials [CATS]')
     layout.column(align=True).operator('vku.remove_suffix', text='(8) Remove suffix')
     layout.column(align=True).operator('vku.shiitake', text='(9) Shiitake')
     layout.column(align=True).operator('vku.kemokkonize', text='(10) Kemokkonize')
     layout.column(align=True).operator('vku.fix_misc', text='(11) Fix misc')
-    layout.column(align=True).operator('cats_manual.join_meshes', text='(12) Join all [CATS]')
+    layout.column(align=True).operator('vku.merge', text='(12) Join meshes')
     layout.column(align=True).operator('vku.setup_layers', text='(13) Setup layers')
     layout.column(align=True).operator('smc.combiner', text='(14) Generate atlas [CATS]').cats = True
     layout.column(align=True).operator('vku.rename_atlas', text='(15) Rename atlas materials')
+    layout.column(align=True).operator('file.pack_all', text='(16) Pack all externals [Blender]')
     layout.column(align=True).separator()
     layout.column(align=True).operator('vku.do_everything', text='Do evernything')
 
 classes = [
   RenameKemoBones,
-  BipassUpperChest,
+  ToggleUpperChest,
   RemoveSuffix,
   Shiitake,
   FixMisc,
+  Merge,
   SetupLayers,
   RenameAtlas,
   Kemokkonize,

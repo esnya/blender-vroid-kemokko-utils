@@ -21,8 +21,6 @@ from . import vroid_kemokko_utils
 def register():
   print('Regitering VKU')
   vroid_kemokko_utils.register()
-  for c in vroid_kemokko_utils.classes:
-    bpy.utils.register_class(c)
 
 def unregister():
   print('Unregitering VKU')
