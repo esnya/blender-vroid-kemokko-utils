@@ -26,8 +26,9 @@ mat_patterns = [
   gen_mat_pattern(r'_EyeExtra_', fade=True, prefix='Face'),
   gen_mat_pattern(r'_FACE$|_EYE$', prefix='Face'),
   gen_mat_pattern(r'_SKIN$', outline=True, prefix='Skin'),
-  gen_mat_pattern(r'_HAIR_0[34]$', outline=True, doubleSided=True),
-  gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True),
+  gen_mat_pattern(r'_Body_[0-9]+$', outline=True, doubleSided=True, prefix='Body'),
+  gen_mat_pattern(r'_HAIR_0[34]$', outline=True, doubleSided=True, prefix='Hair'),
+  gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True, prefix='Hair'),
   gen_mat_pattern(r'_CLOTH$', outline=True, doubleSided=True),
 ]
 
@@ -272,7 +273,10 @@ class FixMisc(bpy.types.Operator):
     bpy.ops.object.mode_set(mode='OBJECT')
     return {'FINISHED'}
 
-face_pattern = re.compile(r'_FACE$|_EYE$|_Face_[0-9]+_SKIN$|^Face$')
+mesh_patterns = [
+  (re.compile(r'_FACE$|_EYE$|_Face_[0-9]+_SKIN$|^Face$'), 'Face'),
+  (re.compile(r'_Body_[0-9]+_SKIN$_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$'), 'Body')
+]
 class Merge(bpy.types.Operator):
   bl_idname = 'vku.merge'
   bl_label = 'Merge objects'
@@ -282,24 +286,20 @@ class Merge(bpy.types.Operator):
   def execute(self, context):
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    targets = [o for o in get_mesh_objects(context) if face_pattern.search(o.name)]
-    if len(targets) > 0:
-      bpy.ops.object.select_all(action='DESELECT')
-      set_active_object(targets[0])
-      for o in targets:
-        o.select_set(True)
-      bpy.ops.cats_manual.join_meshes_selected()
-      context.active_object.name = 'Face'
+    groups = {}
+    for mesh in get_mesh_objects(context):
+      key = next(map(lambda a: a[1], filter(lambda a: a[0].search(mesh.name), mesh_patterns)), get_default_prefix())
+      if not key in groups:
+        groups[key] = []
+      groups[key].append(mesh)
 
-    bpy.ops.object.select_all(action='DESELECT')
-    targets = [o for o in get_mesh_objects(context) if not face_pattern.search(o.name)]
-    if len(targets) > 0:
+    for name, targets in groups.items():
       bpy.ops.object.select_all(action='DESELECT')
       set_active_object(targets[0])
       for o in targets:
         o.select_set(True)
       bpy.ops.cats_manual.join_meshes_selected()
-      context.active_object.name = get_default_prefix()
+      context.active_object.name = name
 
     bpy.ops.object.mode_set(mode='OBJECT')
     return {'FINISHED'}
