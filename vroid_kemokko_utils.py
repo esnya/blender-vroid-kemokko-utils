@@ -286,7 +286,7 @@ class FixMisc(bpy.types.Operator):
 
 mesh_patterns = [
   (re.compile(r'_FACE$|_EYE$|_Face_[0-9]+_SKIN$|^Face$'), 'Face'),
-  (re.compile(r'_Body_[0-9]+_SKIN$_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$'), 'Body')
+  (re.compile(r'_Body_[0-9]+_SKIN$|_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$'), 'Body')
 ]
 class Merge(bpy.types.Operator):
   bl_idname = 'vku.merge'
