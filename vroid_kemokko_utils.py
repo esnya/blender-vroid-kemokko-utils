@@ -2,7 +2,7 @@ import bpy
 import re
 import os
 import importlib
-from itertools import chain
+from itertools import chain, groupby
 
 version = 0 if bpy.app.version < (2, 80, 0) else 2 if bpy.app.version > (2, 80, 99) else 1
 
@@ -123,6 +123,17 @@ class RenameKemoBones(bpy.types.Operator):
     for ear_bone in top_bones[(1 if ahoge else 0):][:2]:
       side = 'Left' if ear_bone.head.x > 0 else 'Right'
       rename_hierarcy(ear_bone, f'Ear{side}')
+
+    tail_z_threshold = edit_bones['Spine'].tail.z
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    for obj in get_mesh_objects(context):
+      vertices = [v for v in obj.data.vertices if v.co[2] < tail_z_threshold]
+      head_index = obj.vertex_groups['Head'].index
+      targets = chain.from_iterable([(v.index, g.weight) for g in v.groups if g.group == head_index] for v in vertices)
+      for index, weight in targets:
+        obj.vertex_groups['Head'].remove([index])
+        obj.vertex_groups['Hips'].add([index], weight, 'ADD')
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
