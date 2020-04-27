@@ -14,17 +14,38 @@ bl_info = {
 
 
 # Append files to sys path
-import sys
 import bpy
-from . import vroid_kemokko_utils
+import os
+import sys
+
+sys.path.append(f'{os.path.dirname(__file__)}/vku')
+
+import ui
+import ops
+
+classes = [
+  ops.RenameKemoBones,
+  ops.ToggleUpperChest,
+  ops.RemoveSuffix,
+  ops.Shiitake,
+  ops.FixMisc,
+  ops.Merge,
+  ops.GenarateAtlas,
+  ops.GenarateNormalAtlas,
+  ops.Kemokkonize,
+  ops.DoEverything,
+  ui.MainPanel,
+]
 
 def register():
   print('Regitering VKU')
-  vroid_kemokko_utils.register()
+  for c in classes:
+    bpy.utils.register_class(c)
 
 def unregister():
   print('Unregitering VKU')
-  vroid_kemokko_utils.unregister()
+  for c in classes:
+    bpy.utils.unregister_class(c)
 
 if __name__ == '__main__':
   register()
