@@ -12,30 +12,16 @@ bl_info = {
   'category': 'Object'
 }
 
-
-# Append files to sys path
 import bpy
-import os
-import sys
+from .vku import ui
+from .vku.ops import cats_enhance, kemo_fix, optimize
 
-sys.path.append(f'{os.path.dirname(__file__)}/vku')
-
-import ui
-import ops
-
-classes = [
-  ops.RenameKemoBones,
-  ops.ToggleUpperChest,
-  ops.RemoveSuffix,
-  ops.Shiitake,
-  ops.FixMisc,
-  ops.Merge,
-  ops.GenarateAtlas,
-  ops.GenarateNormalAtlas,
-  ops.Kemokkonize,
-  ops.DoEverything,
-  ui.MainPanel,
-]
+classes = (
+  *ui.classes,
+  *cats_enhance.classes,
+  *kemo_fix.classes,
+  *optimize.classes,
+)
 
 def register():
   print('Regitering VKU')
