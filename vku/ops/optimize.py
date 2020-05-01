@@ -27,23 +27,23 @@ mat_patterns = [
   gen_mat_pattern(r'_CLOTH$', outline=True, doubleSided=True),
 ]
 
-def combine_materials():
+def combine_materials(context=bpy.context):
   smc = import_module('material-combiner-addon-master')
   combiner = smc.operators.combiner
   cats = True
-  scn = bpy.context.scene
+  scn = context.scene
   bpy.ops.smc.refresh_ob_data()
   if cats:
       scn.smc_size = 'PO2'
       scn.smc_gaps = 16.0
-  combiner.set_ob_mode(bpy.context.view_layer if combiner.globs.version > 0 else scn)
+  combiner.set_ob_mode(context.view_layer if combiner.globs.version > 0 else scn)
   data = combiner.get_data(scn.smc_ob_data)
   mats_uv = combiner.get_mats_uv(data)
   combiner.clear_empty_mats(data, mats_uv)
   #combiner.get_duplicates(mats_uv)
   structure = combiner.get_structure(data, mats_uv)
   if combiner.globs.version == 0:
-      bpy.context.space_data.viewport_shade = 'MATERIAL'
+      context.space_data.viewport_shade = 'MATERIAL'
   if (len(structure) == 1) and next(iter(structure.values()))['dup']:
       combiner.clear_duplicates(structure)
       bpy.ops.smc.refresh_ob_data()
@@ -54,7 +54,7 @@ def combine_materials():
       print('FINISHED')
 
   directory = bpy.path.abspath('//')
-  scn = bpy.context.scene
+  scn = context.scene
   scn.smc_save_path = directory
   structure = combiner.BinPacker(combiner.get_size(scn, structure)).fit()
   size = (max([i['gfx']['fit']['x'] + i['gfx']['size'][0] for i in structure.values()]),

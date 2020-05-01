@@ -14,10 +14,10 @@ def rename_hierarcy(target, name, n = 1):
   if len(target.children) >= 1:
     rename_hierarcy(target.children[0], name, n + 1)
 
-def set_active_object(target):
+def set_active_object(target, context=bpy.context):
   bpy.ops.object.mode_set(mode='OBJECT')
   bpy.ops.object.select_all(action='DESELECT')
-  bpy.context.view_layer.objects.active = target
+  context.view_layer.objects.active = target
   target.select_set(True)
 
 def select_vertices(obj, pred):

@@ -23,7 +23,7 @@ class FixBoneNames(bpy.types.Operator):
   ahoge = bpy.props.BoolProperty(default=True)
 
   def execute(self, context):
-    armature = bpy.context.scene.objects['Armature']
+    armature = context.scene.objects['Armature']
     utils.set_active_object(armature)
     bpy.ops.object.mode_set(mode='EDIT')
     edit_bones = armature.data.edit_bones
@@ -55,7 +55,7 @@ class FixBoneNames(bpy.types.Operator):
 
     # Fix LowerArm/Leg is not first child of UppderArm/Leg
     bpy.ops.object.mode_set(mode='OBJECT')
-    utils.set_active_object(bpy.context.scene.objects['Armature'])
+    utils.set_active_object(context.scene.objects['Armature'])
     bpy.ops.object.mode_set(mode='EDIT')
     bones = context.object.data.edit_bones
     joint_bones = [b for b in bones if re.search('^J_', b.name)]
@@ -77,7 +77,7 @@ class ToggleUpperChest(bpy.types.Operator):
   action = bpy.props.StringProperty(default='TOGGLE')
 
   def execute(self, context):
-    armature = bpy.context.scene.objects['Armature']
+    armature = context.scene.objects['Armature']
     utils.set_active_object(armature)
     bpy.ops.object.mode_set(mode='EDIT')
     edit_bones = armature.data.edit_bones
@@ -123,7 +123,7 @@ class FixMeshes(bpy.types.Operator):
 
   def execute(self, context):
     # Fix EyeExtra
-    eye_extra = bpy.context.scene.objects['F00_000_00_EyeExtra_01_EYE']
+    eye_extra = context.scene.objects['F00_000_00_EyeExtra_01_EYE']
     eye_extra.active_shape_key_index = 0
     utils.set_active_object(eye_extra)
     utils.select_vertices(eye_extra, lambda v: v.co[0] > 0)
@@ -132,6 +132,16 @@ class FixMeshes(bpy.types.Operator):
     utils.select_vertices(eye_extra, lambda v: v.co[0] < 0)
     bpy.ops.transform.translate(value=(-0.002, 0, 0))
     bpy.ops.transform.resize(value=(1, 1, 0.6))
+
+    # Merge by discance
+    targets = [o for o in context.scene.objects if re.search(r'_SKIN$', o.name)]
+    for target in targets:
+      utils.set_active_object(target)
+      bpy.ops.object.mode_set(mode='EDIT')
+      bpy.ops.mesh.select_all(action='SELECT')
+      bpy.ops.mesh.remove_doubles()
+
+    bpy.ops.object.mode_set(mode='OBJECT')
 
     return {'FINISHED'}
 
