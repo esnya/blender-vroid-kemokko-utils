@@ -22,6 +22,7 @@ def get_mat_name(pattern):
   # ))
 
 mat_patterns = [
+  gen_mat_pattern(r'EyeIris|EyeHighlight|EyeShiitake', fade=True, prefix='Eye'),
   gen_mat_pattern(r'_EyeExtra_$|_FACE$|_EYE$', fade=True, prefix='Face'),
   gen_mat_pattern(r'_SKIN$', outline=True, normal=True, prefix='Skin'),
   gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True, normal=True, prefix='Hair'),
