@@ -1,33 +1,34 @@
 import bpy
+import os
 import re
 from . import utils
 from itertools import chain
 from importlib import import_module
 
-# (Pattern, Prefix, Fade, Outline, DoubleSided, Fade)
+# (Pattern, Prefix, Fade, Outline, DoubleSided, Normal)
 def gen_mat_pattern(pattern, fade=False, outline=False, doubleSided=False, prefix=None, normal=False):
   return (re.compile(pattern), prefix, fade, outline, doubleSided, normal)
 
 def get_mat_name(pattern):
-  _, prefix, fade, outline, doubleSided, normal = pattern
-  return '_'.join((
-    prefix if prefix else utils.get_default_prefix(),
-    'Fade' if fade else 'Cutout',
-    'Outline' if outline else 'NoOutline',
-    'DoubleSided' if doubleSided else 'SingleSided',
-    'Nml' if normal else '',
-  ))
+  _, prefix, _, _, _, _ = pattern
+  return prefix
+  # _, prefix, fade, outline, doubleSided, normal = pattern
+  # return '_'.join((
+  #   prefix if prefix else utils.get_default_prefix(),
+  #   'Fade' if fade else 'Cutout',
+  #   'Outline' if outline else 'NoOutline',
+  #   'DoubleSided' if doubleSided else 'SingleSided',
+  #   'Nml' if normal else '',
+  # ))
 
 mat_patterns = [
-  gen_mat_pattern(r'_EyeExtra_', fade=True, prefix='Face'),
-  gen_mat_pattern(r'_FACE$|_EYE$', prefix='Face'),
-  gen_mat_pattern(r'_SKIN$', outline=True, prefix='Skin', normal=True),
-  gen_mat_pattern(r'_Body_[0-9]+$', outline=True, doubleSided=True, prefix='Body'),
-  gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True, prefix='Hair', normal=True),
-  gen_mat_pattern(r'_CLOTH$', outline=True, doubleSided=True),
+  gen_mat_pattern(r'_EyeExtra_$|_FACE$|_EYE$', fade=True, prefix='Face'),
+  gen_mat_pattern(r'_SKIN$', outline=True, normal=True, prefix='Skin'),
+  gen_mat_pattern(r'_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$', outline=True, normal=True, prefix='Hair'),
+  gen_mat_pattern(r'_CLOTH$', outline=True, doubleSided=True, prefix='Cloth'),
 ]
 
-def combine_materials(context=bpy.context):
+def combine_materials(context):
   smc = import_module('material-combiner-addon-master')
   combiner = smc.operators.combiner
   cats = True
@@ -70,7 +71,7 @@ def combine_materials(context=bpy.context):
 
 mesh_patterns = [
   (re.compile(r'_FACE$|_EYE$|_Face_[0-9]+_SKIN$|^Face$'), 'Face'),
-  (re.compile(r'_Body_[0-9]+_SKIN$|_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$'), 'Body')
+  (re.compile(r'_Body_[0-9]+_SKIN$|_HAIR_[0-9]+$|_HairBack_[0-9]+_HAIR$|_CLOTH$'), 'Body')
 ]
 class Merge(bpy.types.Operator):
   bl_idname = 'vku.merge'
@@ -90,7 +91,7 @@ class Merge(bpy.types.Operator):
 
     for name, targets in groups.items():
       bpy.ops.object.select_all(action='DESELECT')
-      utils.set_active_object(targets[0])
+      utils.set_active_object(context, targets[0])
       for o in targets:
         o.select_set(True)
       bpy.ops.cats_manual.join_meshes_selected()
@@ -99,13 +100,13 @@ class Merge(bpy.types.Operator):
     bpy.ops.object.mode_set(mode='OBJECT')
     return {'FINISHED'}
 
-def setup_layers(context, prefix = None):
+def setup_layers(context, suffix = None):
   bpy.ops.smc.refresh_ob_data()
   smc_list = [item for item in context.scene.smc_ob_data if item.mat and item.type != 0]
   for item in smc_list:
     item.used = False
-  for item in [item for item in smc_list if prefix == None or re.search(rf'{prefix}$', item.mat.name)]:
-    original_name = re.sub(r'_nml$', '', item.mat.name) if prefix else item.mat.name
+  for item in [item for item in smc_list if suffix == None or re.search(f'{suffix}$', item.mat.name)]:
+    original_name = re.sub(f'{suffix}$', '', item.mat.name) if suffix else item.mat.name
     matched_index = next(map(lambda a: a[0], filter(lambda a: a[1][0].search(original_name), enumerate(mat_patterns))), None)
     if matched_index != None:
       item.layer = matched_index + 1
@@ -120,10 +121,10 @@ def move_image(image, path):
   image.unpack(method='WRITE_LOCAL')
   image.filepath = path
 
-def rename(context, prefix = None):
+def rename(context, suffix = None):
   name = utils.get_default_prefix()
-  if prefix:
-    name = f'{name}{prefix}'
+  if suffix:
+    name = f'{name}{suffix}'
   img_name = f'{name}.png'
   img_path = f'//textures/{img_name}'
 
@@ -133,7 +134,7 @@ def rename(context, prefix = None):
     if m:
       mat_index = int(m[1]) - 1
       name = get_mat_name(mat_patterns[mat_index])
-      material.name = f'{name}{prefix}' if prefix else name
+      material.name = f'{name}{suffix}' if suffix else name
 
   nodes = list(chain.from_iterable([material.node_tree.nodes for material in materials]))
   image_names = set([node.image.name for node in nodes if node.type == 'TEX_IMAGE'])
@@ -149,56 +150,72 @@ def rename(context, prefix = None):
     if re.search(r'DoubleSided', mat.name):
       mat.use_backface_culling = False
 
-class GenarateNormalAtlas(bpy.types.Operator):
-  bl_idname = 'vku.generate_normal_atlas'
-  bl_label = 'Generate normal atlas'
-  bl_options = {'REGISTER', 'UNDO'}
+extra_textures = (
+  {
+    'node_label': 'NomalmapTexture',
+    'shader_slot': 'Normal',
+    'suffix': '_nml',
+  },
+  {
+    'node_label': 'Emission_Texture',
+    'shader_slot': 'Emission',
+    'suffix': '_emit',
+  },
+  {
+    'node_label': 'OutlineWidthTexture',
+    'shader_slot': None,
+    'suffix': '_out',
+  },
+)
 
-  def execute(self, context):
-    mesh_objects = [o for o in context.scene.objects if o.type == 'MESH']
-    for obj in mesh_objects:
-      copied = obj.copy()
-      copied.data = obj.data.copy()
-      copied.name = f'{obj.name}_nml'
-      context.scene.collection.objects.link(copied)
-      for slot in copied.material_slots:
-        material = slot.material
-        material_nml = material.copy()
-        material_nml.name = f'{material.name}_nml'
-        slot.material = material_nml
+def generate_extra_atlas(context, node_label, shader_slot, suffix):
+  print('Generating extra atlas', node_label, shader_slot, suffix)
 
-        main_node = next(filter(lambda node: node.label == 'MainTexture', material_nml.node_tree.nodes))
-        normal_node = next(filter(lambda node: node.label == 'NomalmapTexture', material_nml.node_tree.nodes))
-        main_texture = main_node.image
-        normal_texture = normal_node.image
+  if not os.path.exists(bpy.path.abspath('//textures')):
+    os.mkdir(bpy.path.abspath('//textures'))
+  if not os.path.exists(bpy.path.abspath('//tmp')):
+    os.mkdir(bpy.path.abspath('//tmp'))
 
-        image = normal_texture.copy()
-        image.name = f'{material_nml.name}.png'
-        image.scale(main_texture.size[0], main_texture.size[1])
-        move_image(image, f'//textures/{image.name}')
-        main_node.image = image
+  for obj in [o for o in context.scene.objects if o.type == 'MESH']:
+    obj_copy = obj.copy()
+    obj_copy.data = obj.data.copy()
+    obj_copy.name = f'{obj.name}{suffix}'
+    context.scene.collection.objects.link(obj_copy)
 
-    setup_layers(context, '_nml')
-    combine_materials()
-    rename(context, '_nml')
-
-    objects_nml = [o for o in context.scene.objects if re.search(r'_nml$', o.name)]
-    for obj in objects_nml:
-      context.scene.collection.objects.unlink(obj)
-
-    return {'FINISHED'}
-
-def add_normal_atlas(context):
-  for obj in utils.get_mesh_objects(context):
-    for slot in obj.material_slots:
+    for slot in [slot for slot in obj_copy.material_slots if slot.material]:
       material = slot.material
-      if not material or not re.search('Nml', material.name):
-        break
+      material_copy = material.copy()
+      material_copy.name = f'{material.name}{suffix}'
+      slot.material = material_copy
 
+      main_node = next(filter(lambda node: node.label == 'MainTexture', material_copy.node_tree.nodes))
+      target_node = next(filter(lambda node: node.label == node_label, material_copy.node_tree.nodes), None)
+      main_texture = main_node.image
+      target_texture = target_node.image if target_node else None
+
+      image_name = f'{material_copy.name}.png'
+      image = target_texture.copy() if target_texture else bpy.data.images.new(image_name, *main_texture.size, alpha=True)
+      image.name = image_name
+      image.scale(*main_texture.size)
+      move_image(image, f'//tmp/{image.name}')
+      main_node.image = image
+
+  setup_layers(context, suffix)
+  combine_materials(context)
+  rename(context, suffix)
+
+  target_objects = [o for o in context.scene.objects if re.search(f'{suffix}$', o.name)]
+  for obj in target_objects:
+    context.scene.collection.objects.unlink(obj)
+
+def connect_normal_atlas(context, suffix, shader_slot, node_label=None):
+  for obj in utils.get_mesh_objects(context):
+    for material in [slot.material for slot in obj.material_slots if slot.material]:
       shader_node = material.node_tree.nodes['Principled BSDF']
-      normal_node = material.node_tree.nodes.new(type='ShaderNodeTexImage')
-      normal_node.image = bpy.data.images[f'{utils.get_default_prefix()}_nml.png']
-      material.node_tree.links.new(normal_node.outputs['Color'], shader_node.inputs['Normal'])
+      target_node = material.node_tree.nodes.new(type='ShaderNodeTexImage')
+      target_node.image = bpy.data.images[f'{utils.get_default_prefix()}{suffix}.png']
+      if next(filter(lambda pattern: pattern[1] == material.name and pattern[5], mat_patterns), False):
+        material.node_tree.links.new(target_node.outputs['Color'], shader_node.inputs[shader_slot])
 
 class GenarateAtlas(bpy.types.Operator):
   bl_idname = 'vku.generate_atlas'
@@ -206,15 +223,18 @@ class GenarateAtlas(bpy.types.Operator):
   bl_options = {'REGISTER', 'UNDO'}
 
   def execute(self, context):
-    setup_layers(context)
-    combine_materials()
-    rename(context)
-    add_normal_atlas(context)
-    return {'FINISHED'}
+    for options in [options for options in extra_textures]:
+      generate_extra_atlas(context, **options)
 
+    setup_layers(context)
+    combine_materials(context)
+    rename(context)
+
+    for options in [options for options in extra_textures if options['shader_slot']]:
+      connect_normal_atlas(context, **options)
+    return {'FINISHED'}
 
 classes = (
   Merge,
-  GenarateNormalAtlas,
   GenarateAtlas,
 )

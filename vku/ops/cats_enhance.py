@@ -24,7 +24,7 @@ class FixBoneNames(bpy.types.Operator):
 
   def execute(self, context):
     armature = context.scene.objects['Armature']
-    utils.set_active_object(armature)
+    utils.set_active_object(context, armature)
     bpy.ops.object.mode_set(mode='EDIT')
     edit_bones = armature.data.edit_bones
 
@@ -55,7 +55,7 @@ class FixBoneNames(bpy.types.Operator):
 
     # Fix LowerArm/Leg is not first child of UppderArm/Leg
     bpy.ops.object.mode_set(mode='OBJECT')
-    utils.set_active_object(context.scene.objects['Armature'])
+    utils.set_active_object(context, context.scene.objects['Armature'])
     bpy.ops.object.mode_set(mode='EDIT')
     bones = context.object.data.edit_bones
     joint_bones = [b for b in bones if re.search('^J_', b.name)]
@@ -78,7 +78,7 @@ class ToggleUpperChest(bpy.types.Operator):
 
   def execute(self, context):
     armature = context.scene.objects['Armature']
-    utils.set_active_object(armature)
+    utils.set_active_object(context, armature)
     bpy.ops.object.mode_set(mode='EDIT')
     edit_bones = armature.data.edit_bones
 
@@ -96,6 +96,9 @@ class ToggleUpperChest(bpy.types.Operator):
   def invoke(self, context, state=None):
     return self.execute(state)
 
+def get_addon_texture_path(path):
+  return f'{os.path.dirname(__file__)}/../../{path}'
+
 class FixMaterials(bpy.types.Operator):
   bl_idname = 'vku.fix_materials'
   bl_label = 'Fix materials'
@@ -105,7 +108,14 @@ class FixMaterials(bpy.types.Operator):
     image = bpy.data.images['F00_000_00_Face_00_nml.png']
     if len(image.packed_files) > 0:
       image.unpack(method='WRITE_LOCAL')
-    image.filepath = f'{os.path.dirname(__file__)}/../..///F00_000_00_Face_00_nml_fix.png'
+    image.filepath = get_addon_texture_path('//F00_000_00_Face_00_nml_fix.png')
+
+    for pattern, source in [(r'^F[0-9]+_[0-9]+_Hair_[0-9]+_HAIR_[0-9]+$', '//F00_000_Hair_00_00_out_fix.png'), (r'^F[0-9]+_[0-9]+_[0-9]+_Body_[0-9]+_SKIN$', '//F00_001_01_Body_00_out_fix.png')]:
+      for material in [m for m in bpy.data.materials if re.search(pattern, m.name)]:
+        node = material.node_tree.nodes.new(type='ShaderNodeTexImage')
+        node.label = 'OutlineWidthTexture'
+        node.image = bpy.data.images.load(get_addon_texture_path(source))
+        node.image.name = f'{material.name}_out.png'
 
     if os.path.exists(bpy.path.abspath('//F00_000_HairBack_00.png')):
       image = bpy.data.images['F00_000_HairBack_00.png']
@@ -125,7 +135,7 @@ class FixMeshes(bpy.types.Operator):
     # Fix EyeExtra
     eye_extra = context.scene.objects['F00_000_00_EyeExtra_01_EYE']
     eye_extra.active_shape_key_index = 0
-    utils.set_active_object(eye_extra)
+    utils.set_active_object(context, eye_extra)
     utils.select_vertices(eye_extra, lambda v: v.co[0] > 0)
     bpy.ops.transform.translate(value=(0.002, 0, 0))
     bpy.ops.transform.resize(value=(1, 1, 0.6))
@@ -136,7 +146,7 @@ class FixMeshes(bpy.types.Operator):
     # Merge by discance
     targets = [o for o in context.scene.objects if re.search(r'_SKIN$', o.name)]
     for target in targets:
-      utils.set_active_object(target)
+      utils.set_active_object(context, target)
       bpy.ops.object.mode_set(mode='EDIT')
       bpy.ops.mesh.select_all(action='SELECT')
       bpy.ops.mesh.remove_doubles()

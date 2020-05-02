@@ -16,7 +16,7 @@ class Shiitake(bpy.types.Operator):
   def execute(self, context):
     # Duplicate Eye Extra
     eye_extra = context.scene.objects['F00_000_00_EyeExtra_01_EYE']
-    utils.set_active_object(eye_extra)
+    utils.set_active_object(context, eye_extra)
     bpy.ops.object.duplicate()
 
     # Rename
@@ -28,7 +28,7 @@ class Shiitake(bpy.types.Operator):
     eye_shiitake.active_shape_key.name = 'Eye Shiitake'
 
     # Assign weights
-    utils.set_active_object(eye_shiitake)
+    utils.set_active_object(context, eye_shiitake)
     utils.select_vertices(eye_shiitake, lambda v: v.co[0] > 0)
     bpy.ops.object.vertex_group_set_active(group='Eye_L')
     bpy.ops.object.vertex_group_assign()
@@ -50,7 +50,7 @@ class Shiitake(bpy.types.Operator):
 
     # Add shape key into highlight
     highlight = context.scene.objects['F00_000_00_EyeHighlight_00_EYE']
-    utils.set_active_object(highlight)
+    utils.set_active_object(context, highlight)
     highlight.shape_key_add(name='Eye Shiitake')
     highlight.active_shape_key_index = highlight.to_mesh().shape_keys.key_blocks.find('Eye Shiitake')
     bpy.ops.object.mode_set(mode='EDIT')
@@ -68,11 +68,11 @@ class RemoveHumanEars(bpy.types.Operator):
 
   def execute(self, context):
     face = context.scene.objects['F00_000_00_Face_00_SKIN']
-    utils.set_active_object(face)
+    utils.set_active_object(context, face)
     utils.select_vertices(face, lambda v: v.co[1] > 0)
     bpy.ops.mesh.separate(type='SELECTED')
     bpy.ops.object.mode_set(mode='OBJECT')
-    utils.set_active_object(context.scene.objects['F00_000_00_Face_00_SKIN.001'])
+    utils.set_active_object(context, context.scene.objects['F00_000_00_Face_00_SKIN.001'])
     bpy.ops.object.delete()
 
     return {'FINISHED'}
